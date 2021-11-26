@@ -1,0 +1,12 @@
+# Bin files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment files
+.idea
+
+# Vendor files
+/vendor
+
