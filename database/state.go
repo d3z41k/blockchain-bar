@@ -2,17 +2,22 @@ package database
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 )
+
+type Snapshot [32]byte
 
 type State struct {
 	Balances  map[Account]uint
 	txMempool []Tx
 
-	dbFile *os.File
+	dbFile   *os.File
+	snapshot Snapshot
 }
 
 func NewStateFromDisk() (*State, error) {
@@ -39,7 +44,7 @@ func NewStateFromDisk() (*State, error) {
 
 	scanner := bufio.NewScanner(f)
 
-	state := &State{balances, make([]Tx, 0), f}
+	state := &State{balances, make([]Tx, 0), f, Snapshot{}}
 
 	// Iterate over each the tx.db file's line
 	for scanner.Scan() {
@@ -51,14 +56,21 @@ func NewStateFromDisk() (*State, error) {
 		var tx Tx
 		json.Unmarshal(scanner.Bytes(), &tx)
 
-		// Rebuild the state (user balances),
-		// as a series of events
+		// Rebuild the state (user balances), as a series of events
 		if err := state.apply(tx); err != nil {
 			return nil, err
 		}
 	}
 
+	if err = state.doSnapshot(); err != nil {
+		return nil, err
+	}
+
 	return state, nil
+}
+
+func (s *State) LatestSnapshot() Snapshot {
+	return s.snapshot
 }
 
 func (s *State) Add(tx Tx) error {
@@ -71,28 +83,34 @@ func (s *State) Add(tx Tx) error {
 	return nil
 }
 
-func (s *State) Persist() error {
-	// Make a copy of mempool because the s.txMempool will be modified
-	// in the loop below
-
+func (s *State) Persist() (Snapshot, error) {
+	// Make a copy of mempool because the s.txMempool will be modified in the loop below
 	mempool := make([]Tx, len(s.txMempool))
 	copy(mempool, s.txMempool)
 
 	for i := 0; i < len(mempool); i++ {
 		txJson, err := json.Marshal(mempool[i])
 		if err != nil {
-			return err
+			return Snapshot{}, err
 		}
 
+		fmt.Printf("Persisting new TX to disk:\n")
+		fmt.Printf("\t%s\n", txJson)
 		if _, err = s.dbFile.Write(append(txJson, '\n')); err != nil {
-			return err
+			return Snapshot{}, err
 		}
+
+		err = s.doSnapshot()
+		if err != nil {
+			return Snapshot{}, err
+		}
+		fmt.Printf("New DB Snapshot: %x\n", s.snapshot)
 
 		// Remove the TX written to a file from the mempool
 		s.txMempool = s.txMempool[1:]
 	}
 
-	return nil
+	return s.snapshot, nil
 }
 
 func (s *State) apply(tx Tx) error {
@@ -111,6 +129,22 @@ func (s *State) apply(tx Tx) error {
 	return nil
 }
 
-func (s *State) Close() {
-	s.dbFile.Close()
+func (s *State) doSnapshot() error {
+	// Re-read the whole file from the first byte
+	_, err := s.dbFile.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+
+	txsData, err := ioutil.ReadAll(s.dbFile)
+	if err != nil {
+		return err
+	}
+	s.snapshot = sha256.Sum256(txsData)
+
+	return nil
+}
+
+func (s *State) Close() error {
+	return s.dbFile.Close()
 }
