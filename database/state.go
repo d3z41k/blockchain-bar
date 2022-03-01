@@ -12,11 +12,15 @@ type State struct {
 	Balances  map[Account]uint
 	txMempool []Tx
 
-	dbFile          *os.File
+	dbFile *os.File
+
+	latestBlock     Block
 	latestBlockHash Hash
 }
 
 func NewStateFromDisk(dataDir string) (*State, error) {
+	dataDir = ExpandPath(dataDir)
+
 	err := initDataDirIfNotExists(dataDir)
 	if err != nil {
 		return nil, err
@@ -39,7 +43,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 
 	scanner := bufio.NewScanner(f)
 
-	state := &State{balances, make([]Tx, 0), f, Hash{}}
+	state := &State{balances, make([]Tx, 0), f, Block{}, Hash{}}
 
 	// Iterate over each the tx.db file's line
 	for scanner.Scan() {
@@ -48,6 +52,11 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		}
 
 		blockFsJson := scanner.Bytes()
+
+		if len(blockFsJson) == 0 {
+			break
+		}
+
 		var blockFs BlockFS
 		err = json.Unmarshal(blockFsJson, &blockFs)
 		if err != nil {
@@ -59,6 +68,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 			return nil, err
 		}
 
+		state.latestBlock = blockFs.Value
 		state.latestBlockHash = blockFs.Key
 	}
 
@@ -66,12 +76,12 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 }
 
 func (s *State) Persist() (Hash, error) {
+	latestBlockHash, err := s.latestBlock.Hash()
+	if err != nil {
+		return Hash{}, err
+	}
 	// Create a new Block with ONLY the new TXs
-	block := NewBlock(
-		s.latestBlockHash,
-		uint64(time.Now().Unix()),
-		s.txMempool,
-	)
+	block := NewBlock(latestBlockHash, s.latestBlock.Header.Number+1, uint64(time.Now().Unix()), s.txMempool)
 
 	blockHash, err := block.Hash()
 	if err != nil {
@@ -93,12 +103,18 @@ func (s *State) Persist() (Hash, error) {
 	if _, err := s.dbFile.Write(append(blockFsJson, '\n')); err != nil {
 		return Hash{}, err
 	}
-	s.latestBlockHash = blockHash
+
+	s.latestBlockHash = latestBlockHash
+	s.latestBlock = block
 
 	// Reset the mempool
 	s.txMempool = []Tx{}
 
-	return s.latestBlockHash, nil
+	return latestBlockHash, nil
+}
+
+func (s *State) LatestBlock() Block {
+	return s.latestBlock
 }
 
 func (s *State) LatestBlockHash() Hash {
