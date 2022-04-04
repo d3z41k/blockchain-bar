@@ -7,8 +7,8 @@ import (
 
 const Major = "0"
 const Minor = "6"
-const Fix = "1"
-const Verbal = "Adds a new attribute to Block Header: “number”"
+const Fix = "2"
+const Verbal = "Adds /node/status HTTP endpoint"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
