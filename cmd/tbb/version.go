@@ -7,8 +7,8 @@ import (
 
 const Major = "0"
 const Minor = "6"
-const Fix = "3"
-const Verbal = "Add bootstrap nodes and peer list"
+const Fix = "1"
+const Verbal = "HTTP API"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
