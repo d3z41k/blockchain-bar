@@ -2,6 +2,7 @@ package database
 
 import (
 	"bufio"
+	"d3z41k/blockchain-bar/fs"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,7 +20,7 @@ type State struct {
 }
 
 func NewStateFromDisk(dataDir string) (*State, error) {
-	dataDir = ExpandPath(dataDir)
+	dataDir = fs.ExpandPath(dataDir)
 
 	err := initDataDirIfNotExists(dataDir)
 	if err != nil {
