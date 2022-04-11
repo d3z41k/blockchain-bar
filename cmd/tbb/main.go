@@ -1,12 +1,14 @@
 package main
 
 import (
+	"d3z41k/blockchain-bar/fs"
 	"fmt"
 	"github.com/spf13/cobra"
 	"os"
 )
 
 const flagDataDir = "datadir"
+const flagIP = "ip"
 const flagPort = "port"
 
 func main() {
@@ -20,7 +22,6 @@ func main() {
 	tbbCmd.AddCommand(migrateCmd())
 	tbbCmd.AddCommand(versionCmd)
 	tbbCmd.AddCommand(balancesCmd())
-	tbbCmd.AddCommand(txCmd())
 	tbbCmd.AddCommand(runCmd())
 
 	err := tbbCmd.Execute()
@@ -33,6 +34,12 @@ func main() {
 func addDefaultRequiredFlags(cmd *cobra.Command) {
 	cmd.Flags().String(flagDataDir, "", "Absolute path to the node data dir where the DB will/is stored")
 	cmd.MarkFlagRequired(flagDataDir)
+}
+
+func getDataDirFromCmd(cmd *cobra.Command) string {
+	dataDir, _ := cmd.Flags().GetString(flagDataDir)
+
+	return fs.ExpandPath(dataDir)
 }
 
 func incorrectUsageErr() error {
