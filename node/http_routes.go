@@ -60,6 +60,7 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 	block := database.NewBlock(
 		state.LatestBlockHash(),
 		state.NextBlockNumber(),
+		1,
 		uint64(time.Now().Unix()),
 		[]database.Tx{tx},
 	)
