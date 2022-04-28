@@ -23,7 +23,7 @@ var migrateCmd = func() *cobra.Command {
 				"127.0.0.1",
 				8080,
 				true,
-				database.NewAccount(miner),
+				database.NewAccount("andrej"),
 				false,
 			)
 
@@ -60,6 +60,9 @@ var migrateCmd = func() *cobra.Command {
 	}
 
 	addDefaultRequiredFlags(migrateCmd)
+	migrateCmd.Flags().String(flagMiner, node.DefaultMiner, "miner account of this node to receive block rewards")
+	migrateCmd.Flags().String(flagIP, node.DefaultIP, "exposed IP for communication with peers")
+	migrateCmd.Flags().Uint64(flagPort, node.DefaultHTTPort, "exposed HTTP port for communication with peers")
 
 	return migrateCmd
 }

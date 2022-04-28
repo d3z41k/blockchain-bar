@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+const DefaultMiner = ""
 const DefaultIP = "127.0.0.1"
 const DefaultHTTPort = 8080
 const endpointStatus = "/node/status"
