@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 )
 
 type State struct {
@@ -66,7 +67,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 			return nil, err
 		}
 
-		err = applyTXs(blockFs.Value.TXs, state)
+		err = applyBlock(blockFs.Value, state)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +96,7 @@ func (s *State) AddBlock(b Block) (Hash, error) {
 
 	// Validate block meta + payload
 	// Replays transactions to verify balances
-	err := applyBlock(b, pendingState)
+	err := applyBlock(b, &pendingState)
 	if err != nil {
 		return Hash{}, err
 	}
@@ -174,7 +175,7 @@ func (s *State) copy() State {
 //
 // Block metadata are verified as well as transactions within -
 // sufficient balances, etc.
-func applyBlock(b Block, s State) error {
+func applyBlock(b Block, s *State) error {
 	nextExpectedBlockNumber := s.latestBlock.Header.Number + 1
 
 	// validate the next block number increases by 1
@@ -188,10 +189,31 @@ func applyBlock(b Block, s State) error {
 		return fmt.Errorf("next block parent hash must be '%x' not '%x'", s.latestBlockHash, b.Header.Parent)
 	}
 
-	return applyTXs(b.TXs, &s)
+	hash, err := b.Hash()
+	if err != nil {
+		return err
+	}
+
+	if !IsBlockHashValid(hash) {
+		return fmt.Errorf("invalid block hash %x", hash)
+	}
+
+	err = applyTXs(b.TXs, s)
+	if err != nil {
+		return err
+	}
+
+	// if the block and its TXs are valid, reward the miner
+	s.Balances[b.Header.Miner] += BlockReward
+
+	return nil
 }
 
 func applyTXs(txs []Tx, s *State) error {
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].Time < txs[j].Time
+	})
+
 	for _, tx := range txs {
 		err := applyTx(tx, s)
 		if err != nil {
@@ -203,11 +225,6 @@ func applyTXs(txs []Tx, s *State) error {
 }
 
 func applyTx(tx Tx, s *State) error {
-	if tx.IsReward() {
-		s.Balances[tx.To] += tx.Value
-		return nil
-	}
-
 	if tx.Value > s.Balances[tx.From] {
 		return fmt.Errorf("wrong TX. Sender '%s' balance is %d TBB. Tx cost is %d", tx.From, s.Balances[tx.From], tx.Value)
 	}
